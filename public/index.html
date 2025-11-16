@@ -1,0 +1,1061 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Review Booster</title>
+
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <script src="https://unpkg.com/react@17/umd/react.development.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@17/umd/react-dom.development.js" crossorigin></script>
+
+  <script src="https://unpkg.com/axios/dist/axios.min.js"></script>
+
+  <script src="https://unpkg.com/@babel/standalone@7/babel.min.js"></script>
+
+  <style>
+    /* Simple CSS for loading state */
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      /* DARK MODE CHANGE: Updated background and text color for body */
+      background-color: #000;
+      color: #fff;
+    }
+
+    #loading {
+      display: flex;
+      flex-direction: column;
+      /* Stack items vertically */
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      font-size: 1.2rem;
+      /* DARK MODE CHANGE: Lighten text */
+      color: #bbb;
+      gap: 16px;
+      /* Add space between spinner and text */
+    }
+
+    /* Simple spinner for loading */
+    .spinner {
+      width: 48px;
+      height: 48px;
+      /* DARK MODE CHANGE: Darken spinner track */
+      border: 5px solid #333;
+      border-bottom-color: #3b82f6;
+      /* Blue color */
+      border-radius: 50%;
+      display: inline-block;
+      box-sizing: border-box;
+      animation: rotation 1s linear infinite;
+    }
+
+    @keyframes rotation {
+      0% {
+        transform: rotate(0deg);
+      }
+
+      100% {
+        transform: rotate(360deg);
+      }
+    }
+
+    /* Custom Toast Notification */
+    .toast {
+      position: fixed;
+      top: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: #222;
+      color: white;
+      padding: 12px 24px;
+      border-radius: 8px;
+      z-index: 9999;
+      opacity: 0;
+      font-size: 0.9rem;
+      font-weight: 500;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+      animation: fade 2.5s forwards;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .toast.success {
+      background: #059669;
+      /* Green */
+    }
+
+    .toast.error {
+      background: #DC2626;
+      /* Red */
+    }
+
+    @keyframes fade {
+      0% {
+        opacity: 0;
+        top: 0px;
+      }
+
+      10% {
+        opacity: 1;
+        top: 20px;
+      }
+
+      90% {
+        opacity: 1;
+        top: 20px;
+      }
+
+      100% {
+        opacity: 0;
+        top: 0px;
+      }
+    }
+
+    /* === GEMINI EDIT: Added Shimmer Background Styles === */
+    .shimmer-bg {
+      /* Base gradient from the image */
+      background-color: #1a012e;
+      /* Fallback */
+      background-image: radial-gradient(at top, #3a085b, #1a012e 70%);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .shimmer-bg::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+
+      /* The shimmer line: a diagonal, semi-transparent white gradient */
+      background-image: linear-gradient(110deg,
+          transparent 30%,
+          rgba(255, 255, 255, 0.15) 50%,
+          transparent 70%);
+
+      /* Animation: 1.5s, linear, infinite */
+      animation: shimmer 1.5s linear infinite;
+    }
+
+    @keyframes shimmer {
+      from {
+        /* Start off-screen to the left */
+        transform: translateX(-100%) skewX(-20deg);
+      }
+
+      to {
+        /* Move across and off-screen to the right */
+        transform: translateX(200%) skewX(-20deg);
+      }
+    }
+
+    /* === END GEMINI EDIT === */
+  </style>
+</head>
+
+<script>
+  // V2 Toast function with success/error types
+  function toast(msg, type = 'default') {
+    const t = document.createElement("div");
+    t.className = `toast ${type}`;
+
+    let icon = '';
+    if (type === 'success') {
+      icon = `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>`;
+    } else if (type === 'error') {
+      icon = `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>`;
+    }
+
+    t.innerHTML = `${icon} <span>${msg}</span>`;
+    document.body.appendChild(t);
+    setTimeout(() => t.remove(), 2500);
+  }
+</script>
+
+<body>
+
+  <div id="root">
+    <div id="loading">
+      <div class="spinner"></div>
+      Loading Review Booster...
+    </div>
+  </div>
+
+  <script type="text/babel">
+
+    // === React App ===
+
+    // Helper libraries from window
+    const { useState, useEffect, useMemo, useCallback, Fragment } = React;
+
+    // Set up a pre-configured axios instance
+    const api = axios.create({
+      baseURL: window.location.origin, // Uses the current domain
+      headers: { 'Content-Type': 'application/json' }
+    });
+
+    /**
+     * ===============================================
+     * Custom Hook for Navigation
+     * ===============================================
+     */
+    const usePathNavigation = () => {
+      const path = window.location.pathname;
+      const parts = useMemo(() => path.split('/').filter(Boolean), [path]);
+
+      let page = 'admin'; // Default
+      let clientId = null;
+
+      if (parts[0] === 'review' && parts[1]) {
+        page = 'review';
+        clientId = parts[1];
+      } else if (parts[0] === 'admin') {
+        page = 'admin';
+      }
+
+      return { page, clientId };
+    };
+
+    /**
+     * ===============================================
+     * Inline SVG Icons
+     * ===============================================
+     */
+    const Icons = {
+      Copy: () => <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>,
+      Trash: () => <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>,
+      Edit: () => <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>,
+      QR: () => <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v1m6 11h2m-6.707 6.707l.707.707m-11.314-.707l.707-.707M4 12H2m1.293-9.293l-.707.707m11.314.707l-.707-.707M12 20v-1m-6.707-6.707l-.707-.707m11.314-.707l-.707.707M9 12a3 3 0 116 0 3 3 0 01-6 0z" /></svg>,
+      Reviews: () => <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" /></svg>,
+      Back: () => <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>,
+      Plus: () => <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" /></svg>,
+      Close: () => <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>,
+      Info: () => <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>,
+      Link: () => <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" /></svg>,
+      Image: () => <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l-1.586-1.586a2 2 0 00-2.828 0L6 14m6-6l.01.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>,
+      Palette: () => <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01" /></svg>,
+      FileText: () => <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>,
+    };
+
+    /**
+     * ===============================================
+     * Component: ReviewPage
+     * ===============================================
+     * === GEMINI EDIT ===
+     * Re-styled to match the user's provided image (image_75d6c5.jpg)
+     * This includes the purple shimmering gradient background,
+     * new header, new button, and new footer.
+     */
+    const ReviewPage = ({ clientId }) => {
+      const [client, setClient] = useState(null);
+      const [review, setReview] = useState(null);
+      const [loading, setLoading] = useState(true);
+      const [error, setError] = useState(null);
+
+      useEffect(() => {
+        const load = async () => {
+          try {
+            const [c, r] = await Promise.all([
+              api.get(`/api/client/${clientId}`),
+              api.get(`/api/client/${clientId}/random-review`)
+            ]);
+
+            setClient(c.data);
+            setReview(r.data.review);
+
+            document.title = `${c.data.clientName} - Review`;
+          } catch (e) {
+            setError("Client not found or server error.");
+          }
+          setLoading(false);
+        };
+        load();
+      }, [clientId]);
+
+
+      const handleCopy = () => {
+        // Use document.execCommand for better iframe compatibility
+        const textArea = document.createElement("textarea");
+        textArea.value = review;
+        textArea.style.position = "fixed"; //avoid scrolling to bottom
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+        try {
+          document.execCommand('copy');
+          toast("Review copied!", "success");
+        } catch (err) {
+          toast("Copy failed!", "error");
+        }
+        document.body.removeChild(textArea);
+
+        // Open link after attempting copy
+        window.open(client.googleReviewLink, "_blank");
+      };
+
+
+      // ---- SAFE RETURNS INSIDE FUNCTION ----
+      if (loading) {
+        return (
+          // UPDATED: Loading spinner for new background
+          <div className="min-h-screen flex justify-center items-center shimmer-bg">
+            <div className="spinner"></div>
+          </div>
+        );
+      }
+
+      if (error) {
+        return (
+          // UPDATED: Error message for new background
+          <div className="min-h-screen flex justify-center items-center text-red-500 shimmer-bg">
+            {error}
+          </div>
+        );
+      }
+
+      return (
+        // UPDATED: Root div with shimmer background
+        <div className="min-h-screen w-full flex flex-col items-center justify-between p-6 shimmer-bg text-white">
+
+          {/* UPDATED: HEADER to match image */}
+          <div className="flex flex-col items-center pt-10 h-28 text-center px-6">
+            <div className="w-16 h-1 bg-purple-400 rounded-full mb-4 opacity-70"></div>
+            <h1 className="text-2xl md:text-3xl font-bold tracking-wider uppercase text-white/90" style={{ textShadow: '0 2px 4px rgba(0,0,0,0.2)' }}>
+              {client.clientName}
+            </h1>
+          </div>
+
+          {/* UPDATED: GLASS CARD to match image */}
+          <div className="w-full max-w-md bg-black/20 backdrop-blur-lg rounded-2xl shadow-xl border border-white/10 p-8 flex flex-col items-center">
+
+            {/* STARS (same) */}
+            <div className="text-yellow-400 text-3xl mb-6 tracking-wide">
+              ★★★★★
+            </div>
+
+            {/* REVIEW TEXT (Removed inner box) */}
+            <p className="text-center text-white/80 text-lg leading-relaxed mb-8">
+              {review}
+            </p>
+
+            {/* UPDATED: BUTTON to match image */}
+            <button
+              onClick={handleCopy}
+              className="w-full py-3.5 rounded-xl font-semibold text-lg transition-all duration-300 hover:opacity-90 hover:scale-[1.02] flex items-center justify-center gap-2
+                   bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-lg shadow-purple-500/30"
+            >
+              <Icons.Copy />
+              COPY REVIEW
+            </button>
+          </div>
+
+          {/* UPDATED: FOOTER to match image */}
+          <div className="pb-6 pt-12 text-center text-gray-400 text-xs opacity-90 h-20 flex flex-col items-center justify-center">
+            <div className="flex items-center gap-2 text-sm text-white/70">
+              AI
+              {/* 4-point star SVG */}
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M12 2L9.42 9.42L2 12L9.42 14.58L12 22L14.58 14.58L22 12L14.58 9.42L12 2Z" fill="#60a5fa" />
+              </svg>
+              Powered
+            </div>
+            <div className="flex items-center gap-2 mt-2">
+              {/* Maruti 'M' logo SVG */}
+              <svg width="24" height="24" viewBox="0 0 100 60" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M0 60L24.1935 0H41.9355L17.7419 60H0Z" fill="white" />
+                <path d="M29.0323 60L53.2258 0H70.9677L46.7742 60H29.0323Z" fill="white" />
+                <path d="M82.2581 0L58.0645 60H75.8065L100 0H82.2581Z" fill="white" />
+              </svg>
+              <span className="font-semibold tracking-wider text-white/90">
+                Maruti IT SOLUTIONS
+              </span>
+            </div>
+          </div>
+        </div>
+      );
+
+
+
+    };
+
+    /**
+     * ===============================================
+     * Component: Reusable UI Components
+     * ===============================================
+     * MOVED OUTSIDE of AdminPanel to prevent re-declaration
+     * on every render, which fixes the input focus bug.
+     */
+
+    // --- Reusable Button Component ---
+    const Button = ({ onClick, children, variant = 'primary', type = 'button', className = '' }) => {
+      // DARK MODE CHANGE: Updated variants
+      const variants = {
+        primary: 'bg-blue-600 hover:bg-blue-700 text-white',
+        secondary: 'bg-gray-700 hover:bg-gray-600 text-white',
+        danger: 'bg-red-600 hover:bg-red-700 text-white',
+        outline: 'bg-transparent hover:bg-gray-800 text-gray-300 border border-gray-700',
+        ghost: 'bg-transparent hover:bg-gray-700 text-gray-300'
+      };
+      return (
+        <button
+          type={type}
+          onClick={onClick}
+          className={`flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-sm font-medium shadow-sm transition-all ${variants[variant]} ${className}`}
+        >
+          {children}
+        </button>
+      );
+    };
+
+    // --- Admin Header ---
+    const Header = ({ view, showCreateForm, showList }) => (
+      // DARK MODE CHANGE: Updated styles
+      <div className="bg-gray-900 shadow-md border-b border-gray-700">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex justify-between items-center h-16">
+            <h1 className="text-xl font-bold text-white tracking-tight">
+              Review Booster Admin
+            </h1>
+            {view === 'list' && (
+              <Button onClick={showCreateForm} variant="primary">
+                <Icons.Plus /> New Client
+              </Button>
+            )}
+            {view !== 'list' && (
+              <Button onClick={showList} variant="outline">
+                <Icons.Back /> Back to List
+              </Button>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+
+    // --- Form Card Wrapper ---
+    const FormCard = ({ title, children }) => (
+      // DARK MODE CHANGE: Updated styles
+      <div className="bg-gray-900 shadow-lg rounded-lg max-w-2xl mx-auto border border-gray-700">
+        <div className="p-6 border-b border-gray-700">
+          <h2 className="text-lg font-semibold text-white">{title}</h2>
+        </div>
+        <div className="p-6">
+          {children}
+        </div>
+      </div>
+    );
+
+    // --- Form Input ---
+    const FormInput = ({ label, name, value, onChange, ...props }) => (
+      // DARK MODE CHANGE: Updated styles
+      <div>
+        <label htmlFor={name} className="block text-sm font-medium text-gray-300 mb-1">{label}</label>
+        <input
+          id={name}
+          name={name}
+          value={value}
+          onChange={onChange}
+          className="block w-full rounded-md border-gray-600 bg-gray-800 text-white shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm placeholder-gray-400"
+          {...props}
+        />
+      </div>
+    );
+
+    // --- Form Input With Icon ---
+    const FormInputWithIcon = ({ icon, label, name, value, onChange, ...props }) => (
+      // DARK MODE CHANGE: Updated styles
+      <div>
+        <label htmlFor={name} className="block text-sm font-medium text-gray-300 mb-1">{label}</label>
+        <div className="relative rounded-md shadow-sm">
+          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400">
+            {icon}
+          </div>
+          <input
+            id={name}
+            name={name}
+            value={value}
+            onChange={onChange}
+            className="block w-full rounded-md border-gray-600 bg-gray-800 text-white pl-10 focus:border-blue-500 focus:ring-blue-500 sm:text-sm placeholder-gray-400"
+            {...props}
+          />
+        </div>
+      </div>
+    );
+
+    // --- Client Form Component ---
+    const ClientForm = React.memo(({ onSubmit, isEdit = false, form, handleFormChange, jsonFiles, showList }) => (
+      // DARK MODE CHANGE: Updated styles
+      <div className="bg-gray-900 shadow-xl rounded-2xl max-w-4xl mx-auto border border-gray-700 overflow-hidden">
+
+        {/* Header */}
+        <div className="px-8 py-6 bg-gradient-to-r from-blue-600 to-indigo-600 text-white">
+          <h2 className="text-xl font-bold">
+            {isEdit ? `Edit Client` : `Create New Client`}
+          </h2>
+          <p className="text-sm opacity-80 mt-1">
+            {isEdit ? 'Update client details below' : 'Fill required fields to continue'}
+          </p>
+        </div>
+
+        <form onSubmit={onSubmit} className="p-8 space-y-10">
+
+          {/* TWO COLUMN GRID */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
+
+            {/* LEFT */}
+            <div className="space-y-6">
+
+              {/* CLIENT ID */}
+              <div>
+                <label className="text-sm font-semibold text-gray-300">Client ID</label>
+                <input
+                  type="text"
+                  name="clientId"
+                  value={form.clientId}
+                  disabled={isEdit}
+                  onChange={handleFormChange}
+                  className="mt-2 w-full px-4 py-3 border border-gray-600 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-gray-800 text-white placeholder-gray-400"
+                  placeholder="unique-business-id"
+                />
+                {isEdit && (
+                  <p className="text-xs text-gray-400 mt-1">Cannot be changed after creation</p>
+                )}
+              </div>
+
+              {/* CLIENT NAME */}
+              <div>
+                <label className="text-sm font-semibold text-gray-300">Client Name</label>
+                <input
+                  type="text"
+                  name="clientName"
+                  value={form.clientName}
+                  onChange={handleFormChange}
+                  className="mt-2 w-full px-4 py-3 border border-gray-600 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-gray-800 text-white placeholder-gray-400"
+                  placeholder="Business Name"
+                  required
+                />
+              </div>
+
+              {/* GOOGLE LINK */}
+              <div>
+                <label className="text-sm font-semibold text-gray-300">Google Review Link</label>
+                <input
+                  type="url"
+                  name="googleReviewLink"
+                  value={form.googleReviewLink}
+                  onChange={handleFormChange}
+                  className="mt-2 w-full px-4 py-3 border border-gray-600 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-gray-800 text-white placeholder-gray-400"
+                  placeholder="https://g.page/r/..."
+                  required
+                />
+              </div>
+
+              {/* LOGO URL */}
+              <div>
+                <label className="text-sm font-semibold text-gray-300">Logo URL</label>
+                <input
+                  type="url"
+                  name="logoUrl"
+                  value={form.logoUrl}
+                  onChange={handleFormChange}
+                  className="mt-2 w-full px-4 py-3 border border-gray-600 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-gray-800 text-white placeholder-gray-400"
+                  placeholder="https://.../logo.png"
+                />
+              </div>
+
+            </div>
+
+            {/* RIGHT */}
+            <div className="space-y-6">
+
+              {/* SOURCE FILE */}
+              {!isEdit && (
+                <div>
+                  <label className="text-sm font-semibold text-gray-300">Initial Reviews Source</label>
+                  <select
+                    name="sourceReviewFile"
+                    value={form.sourceReviewFile}
+                    onChange={handleFormChange}
+                    className="mt-2 w-full px-4 py-3 border border-gray-600 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-gray-800 text-white"
+                  >
+                    <option value="">-- Select --</option>
+                    {jsonFiles.map(file => (
+                      <option key={file} value={file}>{file}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {/* COLOR PICKERS */}
+              <div>
+                <label className="text-sm font-semibold text-gray-300">Brand Colors</label>
+
+                <div className="grid grid-cols-2 gap-6 mt-2">
+                  <div>
+                    <span className="text-xs text-gray-400">Primary (Button)</span>
+                    <input
+                      type="color"
+                      name="primaryColor"
+                      value={form.primaryColor}
+                      onChange={handleFormChange}
+                      className="w-full h-12 rounded-lg border-gray-600"
+                    />
+                  </div>
+                  <div>
+                    <span className="text-xs text-gray-400">Secondary (Text)</span>
+                    <input
+                      type="color"
+                      name="secondaryColor"
+                      value={form.secondaryColor}
+                      onChange={handleFormChange}
+                      className="w-full h-12 rounded-lg border-gray-600"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* LIVE PREVIEW */}
+              <div className="mt-4">
+                <label className="text-sm font-semibold text-gray-300">Preview Button</label>
+                <div className="mt-4 flex justify-center">
+                  <button
+                    type="button"
+                    className="px-6 py-3 rounded-xl font-semibold shadow-lg"
+                    style={{
+                      background: form.primaryColor,
+                      color: form.secondaryColor
+                    }}
+                  >
+                    COPY REVIEW
+                  </button>
+                </div>
+              </div>
+
+            </div>
+          </div>
+
+          {/* FOOTER BUTTONS */}
+          <div className="flex justify-end gap-4 pt-8 border-t border-gray-700">
+            <button
+              type="button"
+              onClick={showList}
+              className="px-6 py-3 rounded-lg border border-gray-700 bg-gray-700 hover:bg-gray-600 text-white"
+            >
+              Cancel
+            </button>
+
+            <button
+              type="submit"
+              className="px-6 py-3 rounded-lg text-white font-semibold shadow bg-blue-600 hover:bg-blue-700"
+            >
+              {isEdit ? "Update Client" : "Create Client"}
+            </button>
+          </div>
+
+        </form>
+      </div>
+    ));
+
+    // --- Client List Component ---
+    const ClientList = ({ loading, error, clients, showReviewManager, handleDownloadQR, showEditForm, handleDeleteClient }) => (
+      // DARK MODE CHANGE: Updated styles
+      <div className="bg-gray-900 shadow-lg rounded-lg overflow-hidden border border-gray-700">
+        <div className="p-4 sm:p-6">
+          <h2 className="text-lg font-semibold text-white">All Clients</h2>
+        </div>
+        {loading && <p className="p-6 text-gray-300">Loading clients...</p>}
+        {error && <p className="p-6 text-red-400">{error}</p>}
+        <div className="border-t border-gray-700">
+          {!loading && clients.length === 0 && (
+            <p className="text-gray-400 text-center py-10">
+              No clients found. Click "+ New Client" to get started.
+            </p>
+          )}
+          <ul className="divide-y divide-gray-700">
+            {clients.map(client => (
+              <li key={client.clientId} className="p-4 sm:p-6 hover:bg-gray-800">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <h3 className="text-base font-semibold text-blue-400">{client.clientName}</h3>
+                    <p className="text-sm text-gray-400 mt-1">ID: {client.clientId}</p>
+                  </div>
+                  {/* Action buttons */}
+                  <div className="flex flex-wrap gap-2 mt-4 sm:mt-0">
+                    <Button onClick={() => showReviewManager(client)} variant="ghost" className="text-green-400 hover:bg-green-900/50">
+                      <Icons.Reviews /> <span className="hidden sm:inline">Reviews</span>
+                    </Button>
+                    <Button onClick={() => handleDownloadQR(client.clientId)} variant="ghost" className="text-blue-400 hover:bg-blue-900/50">
+                      <Icons.QR /> <span className="hidden sm:inline">QR</span>
+                    </Button>
+                    <Button onClick={() => showEditForm(client)} variant="ghost" className="text-yellow-400 hover:bg-yellow-900/50">
+                      <Icons.Edit /> <span className="hidden sm:inline">Edit</span>
+                    </Button>
+                    <Button onClick={() => handleDeleteClient(client.clientId)} variant="ghost" className="text-red-400 hover:bg-red-900/50">
+                      <Icons.Trash /> <span className="hidden sm:inline">Delete</span>
+                    </Button>
+                  </div>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </div>
+      </div>
+    );
+
+    // --- Review Manager Component ---
+    const ReviewManager = ({ currentClient, handleAddReview, reviewForm, setReviewForm, clientReviews, handleDeleteReview }) => (
+      // DARK MODE CHANGE: Updated styles (uses FormCard)
+      <FormCard title={`Manage Reviews for: ${currentClient.clientName}`}>
+        {/* Add Review Form */}
+        <form onSubmit={handleAddReview} className="mb-6 pb-6 border-b border-gray-700">
+          <label className="block text-sm font-medium text-gray-300">Add New Review</label>
+          <textarea
+            value={reviewForm.newReview}
+            onChange={(e) => setReviewForm({ newReview: e.target.value })}
+            className="mt-1 block w-full rounded-md border-gray-600 bg-gray-800 text-white shadow-sm sm:text-sm placeholder-gray-400 focus:ring-blue-500 focus:border-blue-500"
+            rows="3"
+            placeholder="e.g., Fantastic service and great results!"
+          ></textarea>
+          <Button type="submit" variant="primary" className="mt-3">
+            Add Review
+          </Button>
+        </form>
+
+        {/* Review List */}
+        <h3 className="text-base font-semibold text-gray-300 mb-3">Existing Reviews ({clientReviews.length})</h3>
+        <div className="space-y-2 max-h-96 overflow-y-auto pr-2 -mr-2">
+          {clientReviews.length === 0 && <p className="text-gray-400">No reviews found.</p>}
+          {clientReviews.map((review, index) => (
+            <div key={index} className="bg-gray-800 p-3 rounded-md border border-gray-700 flex justify-between items-center">
+              <p className="text-gray-200 italic text-sm">"{review}"</p>
+              <button
+                onClick={() => handleDeleteReview(review)}
+                className="text-gray-500 hover:text-red-400 ml-4 p-1 rounded-full hover:bg-red-900/50"
+                title="Delete review"
+              >
+                <Icons.Close />
+              </button>
+            </div>
+          ))}
+        </div>
+      </FormCard>
+    );
+
+
+    /**
+     * ===============================================
+     * Component: AdminPanel
+     * ===============================================
+     * This component now only holds state and logic,
+     * passing them down as props to the view components.
+     */
+    const AdminPanel = () => {
+      const [clients, setClients] = useState([]);
+      const [loading, setLoading] = useState(true);
+      const [error, setError] = useState(null);
+      const [view, setView] = useState('list'); // 'list', 'create', 'edit', 'reviews'
+      const [currentClient, setCurrentClient] = useState(null);
+      const [jsonFiles, setJsonFiles] = useState([]); // NEW: For source files
+
+      const [form, setForm] = useState({
+        clientId: '',
+        clientName: '',
+        googleReviewLink: '',
+        logoUrl: '',
+        primaryColor: '#3b82f6', // Default blue
+        secondaryColor: '#ffffff',
+        sourceReviewFile: '', // NEW
+      });
+
+      const [reviewForm, setReviewForm] = useState({ newReview: '' });
+      const [clientReviews, setClientReviews] = useState([]);
+
+      // --- Data Fetching ---
+
+      const fetchClients = useCallback(async () => {
+        setLoading(true);
+        try {
+          const res = await api.get('/api/clients');
+          setClients(res.data);
+        } catch (err) {
+          setError('Failed to fetch clients.');
+          toast('Failed to fetch clients.', 'error');
+        }
+        setLoading(false);
+      }, []);
+
+      // NEW: Fetch available JSON files
+      const fetchJsonFiles = async () => {
+        try {
+          // This is the bug fix:
+          // 1. Get ALL files from the data directory.
+          const res = await api.get('/api/data-files');
+          const allFiles = res.data;
+
+          // 2. Get all *clients* that have already been created.
+          // We use the 'clients' state which is already loaded by fetchClients.
+          const clientIds = clients.map(c => c.clientId + '.json');
+
+          // 3. Filter the file list to *exclude* any files that are already clients.
+          const sourceFiles = allFiles.filter(file => !clientIds.includes(file));
+
+          setJsonFiles(sourceFiles); // This list is now clean!
+
+          // 4. Set default source file from the *clean* list.
+          if (sourceFiles.length > 0) {
+            const defaultFile = sourceFiles.includes('sample-reviews-200.json') ? 'sample-reviews-200.json' : sourceFiles[0];
+            // Use a functional update to ensure we don't overwrite other form state
+            setForm(f => ({ ...f, sourceReviewFile: f.sourceReviewFile || defaultFile }));
+          }
+        } catch (err) {
+          toast('Could not load source JSON files.', 'error');
+        }
+      };
+
+      useEffect(() => {
+        fetchClients();
+        // We removed fetchJsonFiles from here to prevent a race condition.
+      }, [fetchClients]);
+
+      // NEW: This effect runs *after* clients are loaded
+      // This ensures we can filter the JSON files list correctly.
+      useEffect(() => {
+        // Run when loading is finished (so we have clients list)
+        if (!loading) {
+          fetchJsonFiles();
+        }
+      }, [loading, clients]); // Dependencies
+
+      const fetchReviews = async (clientId) => {
+        try {
+          const res = await api.get(`/api/client/${clientId}/reviews`);
+          setClientReviews(res.data.reviews);
+        } catch (err) {
+          toast('Failed to load reviews.', 'error');
+        }
+      };
+
+      // --- Form & View Handlers ---
+
+      const handleFormChange = (e) => {
+        const { name, value } = e.target;
+        setForm(prev => ({ ...prev, [name]: value }));
+      };
+
+      const resetForm = () => {
+        setForm({
+          clientId: '',
+          clientName: '',
+          googleReviewLink: '',
+          logoUrl: '',
+          primaryColor: '#3b82f6',
+          secondaryColor: '#ffffff',
+          sourceReviewFile: jsonFiles.includes('sample-reviews-200.json') ? 'sample-reviews-200.json' : (jsonFiles[0] || ''),
+        });
+      };
+
+      const showCreateForm = () => {
+        resetForm();
+        setCurrentClient(null); // Ensure no old client data persists
+        setView('create');
+      };
+
+      const showEditForm = (client) => {
+        setLoading(true);
+        api.get(`/api/client/${client.clientId}`).then(res => {
+          setForm(res.data);
+          setCurrentClient(res.data);
+          setView('edit');
+          setLoading(false);
+        }).catch(() => {
+          toast('Failed to load client details.', 'error');
+          setLoading(false);
+        });
+      };
+
+      const showReviewManager = (client) => {
+        setCurrentClient(client);
+        fetchReviews(client.clientId);
+        setView('reviews');
+      };
+
+      const showList = () => {
+        setView('list');
+        setCurrentClient(null);
+        setClientReviews([]);
+        setReviewForm({ newReview: '' });
+        fetchClients(); // Refresh list
+      };
+
+      // --- API Actions ---
+
+      const handleCreateClient = async (e) => {
+        e.preventDefault();
+        try {
+          await api.post('/api/client', form);
+          toast('Client created successfully!', 'success');
+          showList();
+        } catch (err) {
+          toast(err.response?.data?.message || 'Failed to create client.', 'error');
+        }
+      };
+
+      const handleUpdateClient = async (e) => {
+        e.preventDefault();
+        if (!currentClient) return;
+        try {
+          await api.put(`/api/client/${currentClient.clientId}`, form);
+          toast('Client updated successfully!', 'success');
+          showList();
+        } catch (err) {
+          toast(err.response?.data?.message || 'Failed to update client.', 'error');
+        }
+      };
+
+      const handleDeleteClient = async (clientId) => {
+        // Use a custom modal/toast in a real app, window.confirm is blocked in iframes
+        // For this context, we'll assume 'ok'
+        // if (!window.confirm(`Are you sure you want to delete client "${clientId}"? This is permanent.`)) {
+        //   return;
+        // }
+        console.log(`Requesting delete for ${clientId}. (Confirmation skipped in iframe)`);
+        try {
+          await api.delete(`/api/client/${clientId}`);
+          toast('Client deleted.', 'success');
+          fetchClients(); // Refresh list
+        } catch (err) {
+          toast('Failed to delete client.', 'error');
+        }
+      };
+
+      const handleDownloadQR = async (clientId) => {
+        try {
+          const res = await api.post(`/api/client/${clientId}/generate-qr`);
+          const { qrDataUrl, link } = res.data;
+
+          const a = document.createElement('a');
+          a.href = qrDataUrl;
+          a.download = `${clientId}-qr-code.png`;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+
+          toast(`QR code downloaded!`, 'success');
+
+        } catch (err) {
+          toast('Failed to generate QR code.', 'error');
+        }
+      };
+
+      // --- Review Management ---
+
+      const handleAddReview = async (e) => {
+        e.preventDefault();
+        if (!currentClient || !reviewForm.newReview) return;
+        try {
+          await api.post(`/api/client/${currentClient.clientId}/reviews`, { review: reviewForm.newReview });
+          toast('Review added!', 'success');
+          setReviewForm({ newReview: '' });
+          fetchReviews(currentClient.clientId); // Refresh reviews
+        } catch (err) {
+          toast(err.response?.data?.message || 'Failed to add review.', 'error');
+        }
+      };
+
+      const handleDeleteReview = async (review) => {
+        // if (!currentClient || !window.confirm('Delete this review?')) return;
+        if (!currentClient) return;
+        console.log(`Requesting delete for review. (Confirmation skipped in iframe)`);
+        try {
+          await api.delete(`/api/client/${currentClient.clientId}/reviews`, { data: { review } });
+          toast('Review deleted.', 'success');
+          fetchReviews(currentClient.clientId); // Refresh reviews
+        } catch (err) {
+          toast('Failed to delete review.', 'error');
+        }
+      };
+
+      // --- Main Admin Render ---
+      // All component definitions are now MOVED OUTSIDE
+
+      return (
+        // DARK MODE CHANGE: Updated background
+        <div className="min-h-screen bg-black">
+          <Header
+            view={view}
+            showCreateForm={showCreateForm}
+            showList={showList}
+          />
+          <main className="max-w-7xl mx-auto p-4 sm:p-6 lg:p-8">
+            {view === 'list' && (
+              <ClientList
+                loading={loading}
+                error={error}
+                clients={clients}
+                showReviewManager={showReviewManager}
+                handleDownloadQR={handleDownloadQR}
+                showEditForm={showEditForm}
+                handleDeleteClient={handleDeleteClient}
+              />
+            )}
+            {(view === 'create' || view === 'edit') && (
+              <ClientForm
+                key={currentClient ? currentClient.clientId : 'create'} // Use a dynamic key
+                onSubmit={view === 'create' ? handleCreateClient : handleUpdateClient}
+                isEdit={view === 'edit'}
+                form={form}
+                handleFormChange={handleFormChange}
+                jsonFiles={jsonFiles}
+                showList={showList}
+              />
+            )}
+            {view === 'reviews' && currentClient && (
+              <ReviewManager
+                currentClient={currentClient}
+                handleAddReview={handleAddReview}
+                reviewForm={reviewForm}
+                setReviewForm={setReviewForm}
+                clientReviews={clientReviews}
+                handleDeleteReview={handleDeleteReview}
+              />
+            )}
+          </main>
+        </div>
+      );
+    };
+
+
+    /**
+     * ===============================================
+     * Component: App (Main)
+     * ===============================================
+     */
+    const App = () => {
+      const { page, clientId } = usePathNavigation();
+
+      if (page === 'review') {
+        return <ReviewPage clientId={clientId} />;
+      }
+
+      if (page === 'admin') {
+        return <AdminPanel />;
+      }
+
+      // Fallback, though server should redirect
+      return <AdminPanel />;
+    };
+
+
+    // --- Finally, render the App into the <div id="root"> ---
+    ReactDOM.render(<App />, document.getElementById('root'));
+
+  </script>
+
+</body>
+
+</html>

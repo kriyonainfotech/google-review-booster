@@ -1,0 +1,31 @@
+{
+  "name": "google-review-booster-backend",
+  "version": "1.0.0",
+  "description": "Node.js server for the Google Review Booster system.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "keywords": [
+    "google",
+    "review",
+    "node",
+    "express",
+    "react"
+  ],
+  "author": "Gemini",
+  "license": "MIT",
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^16.6.1",
+    "express": "^4.21.2",
+    "fs": "^0.0.1-security",
+    "fs-extra": "^11.2.0",
+    "joi": "^17.13.1",
+    "path": "^0.12.7",
+    "qrcode": "^1.5.4"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.11"
+  }
+}
