@@ -483,7 +483,7 @@ app.use((err, req, res, next) => {
   console.error("[Server] Unhandled Error:", err.stack);
   res.status(500).send("Something broke!");
 });
- 
+
 
 // Start the server
 app.listen(PORT, async () => {
